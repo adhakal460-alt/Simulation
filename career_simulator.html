@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Career Simulator - Walk & Talk</title>
+    <style>
+        body { margin: 0; padding: 0; width: 100%; height: 100vh; overflow: hidden; }
+        canvas { display: block; }
+        
+        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        #menu.hidden { display: none; }
+        
+        .box { background: white; padding: 50px; border-radius: 20px; text-align: center; max-width: 600px; }
+        .box h1 { color: #667eea; font-size: 40px; margin-bottom: 20px; }
+        .box p { color: #666; margin-bottom: 30px; }
+        
+        .section { margin: 30px 0; text-align: left; }
+        .section h3 { color: #667eea; margin-bottom: 12px; }
+        
+        .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 15px; }
+        .btn { padding: 12px; border: 2px solid #667eea; background: white; color: #667eea; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn:hover, .btn.on { background: #667eea; color: white; }
+        
+        .start { width: 100%; padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-size: 16px; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 30px; }
+        .start:disabled { opacity: 0.4; }
+        
+        #chat { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 800px; display: none; z-index: 100; box-shadow: 0 10px 40px rgba(0,0,0,0.5); max-height: 60vh; overflow-y: auto; }
+        #chat h3 { color: #667eea; margin: 0 0 15px 0; font-size: 18px; }
+        #msgs { font-size: 14px; margin: 10px 0; max-height: 250px; overflow-y: auto; line-height: 1.5; }
+        .msg { margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 5px; }
+        .msg strong { color: #667eea; }
+        .opt { background: #f0f0f0; border: 2px solid #667eea; padding: 10px; margin: 8px 0; cursor: pointer; border-radius: 5px; font-size: 13px; font-weight: 500; transition: all 0.2s ease; }
+        .opt:hover { background: #667eea; color: white; transform: translateX(5px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+        .opt:active { transform: translateX(3px); }
+        #inp { margin-top: 10px; display: flex; gap: 8px; }
+        #inp input { flex: 1; padding: 10px; border: 2px solid #667eea; border-radius: 5px; font-size: 13px; }
+        #inp button { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+
+    <div id="menu">
+        <div class="box">
+            <h1>🌍 Career Simulator</h1>
+            <p>Walk around and talk to founders!</p>
+            
+            <div class="section">
+                <h3>Choose Industry:</h3>
+                <div class="btns">
+                    <button class="btn" onclick="pickInd('fintech')">💰 Fintech</button>
+                    <button class="btn" onclick="pickInd('beauty')">💄 Beauty</button>
+                    <button class="btn" onclick="pickInd('healthtech')">⚕️ HealthTech</button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Choose Location:</h3>
+                <div class="btns" id="locs"></div>
+            </div>
+            
+            <button class="start" id="go" onclick="start()" disabled>START ✈️</button>
+        </div>
+    </div>
+
+    <div id="chat">
+        <h3 id="name"></h3>
+        <div id="msgs"></div>
+        <div id="opts"></div>
+        <div id="inp">
+            <input type="text" id="ask" placeholder="Ask...">
+            <button onclick="send()">Ask</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const DATA = {
+            fintech: { Boston: [
+                { name: "PaymentFlow", founder: "Sarah Chen", desc: "AI payment processing", backstory: "We built PaymentFlow to make payments instant and frictionless using AI." },
+                { name: "CreditMind", founder: "Marcus Johnson", desc: "Credit scoring", backstory: "Traditional credit scoring is broken. We're rebuilding it with machine learning." },
+                { name: "PortfolioAI", founder: "Dr. Ravi Patel", desc: "Investment advisory", backstory: "Most people don't have access to good investment advice. We democratized that." }
+            ], Singapore: [
+                { name: "SeaRemit", founder: "Ananya Sharma", desc: "Remittance platform", backstory: "Remittances cost too much. We cut fees by 70% for migrant workers." },
+                { name: "TradingEdge", founder: "Wei Liu", desc: "Trading platform", backstory: "We give retail traders the same tools as hedge funds." },
+                { name: "BlockChainPay", founder: "Priya Desai", desc: "Crypto payments", backstory: "Crypto should be easy. We made it simple for everyone." }
+            ]},
+            beauty: { Seoul: [
+                { name: "GlowMatch", founder: "Kim Ji-won", desc: "AR makeup app", backstory: "Virtual try-on changed how people buy makeup online." },
+                { name: "SkinGenome", founder: "Park Min-jun", desc: "DNA skincare", backstory: "Everyone's skin is different. DNA testing personalizes skincare." },
+                { name: "BellaSupply", founder: "Lee Seo-yeon", desc: "Beauty marketplace", backstory: "We connect indie beauty brands directly to customers." }
+            ], London: [
+                { name: "VirtuBeauty", founder: "Emma Thompson", desc: "Beauty consultations", backstory: "AI beauty consultants give personalized advice 24/7." },
+                { name: "InkBlend", founder: "Amara Okonkwo", desc: "Eco cosmetics", backstory: "Sustainability shouldn't be a luxury. We proved it." },
+                { name: "SkincareIQ", founder: "Dr. James Harper", desc: "Skincare AI", backstory: "Dermatology meets AI. We diagnose skin conditions with photos." }
+            ]},
+            healthtech: { "San Francisco": [
+                { name: "TelemedicineHub", founder: "Dr. Lisa Wong", desc: "Online doctors", backstory: "Healthcare should be accessible. We removed the distance barrier." },
+                { name: "MentalWell", founder: "James Rodriguez", desc: "Mental health AI", backstory: "Mental health support shouldn't have a waiting list." }
+            ], Mumbai: [
+                { name: "DocNearby", founder: "Dr. Anil Gupta", desc: "Affordable healthcare", backstory: "India has brilliant doctors but poor people can't afford them." },
+                { name: "HealthMonitor", founder: "Priya Nair", desc: "Health wearables", backstory: "Wearables collect data. We turn it into actionable health insights." }
+            ]}
+        };
+
+        const RESPONSES = {
+            "What's your vision?": "We're connecting indie beauty brands directly to customers. No middlemen, just authentic products and real creators.",
+            "How did you start?": "I saw the problem firsthand. Traditional beauty retailers take massive cuts. We built a platform that empowers indie brands.",
+            "What makes you different?": "We focus on authenticity. Every seller is vetted, every product is real, and we take a fair commission that lets creators thrive.",
+            "What's next?": "We're expanding to Southeast Asia next quarter. The beauty market there is huge and underserved.",
+            "Any advice?": "Find a real problem you care about solving. Don't build what VCs want—build what customers need."
+        };
+
+        let ind = null, loc = null;
+        let scene, cam, render, people = [];
+        let pos = new THREE.Vector3(0, 0, 5);
+        let k = {}, m = { x: 0, y: 0 }, talking = null;
+
+        function pickInd(i) {
+            ind = i;
+            document.querySelectorAll('[onclick*="pickInd"]').forEach(b => b.classList.remove('on'));
+            event.target.classList.add('on');
+            
+            const ls = Object.keys(DATA[i]);
+            document.getElementById('locs').innerHTML = ls.map(l => `<button class="btn" onclick="pickLoc('${l}')">${l}</button>`).join('');
+            document.getElementById('go').disabled = true;
+        }
+
+        function pickLoc(l) {
+            loc = l;
+            document.querySelectorAll('#locs .btn').forEach(b => b.classList.remove('on'));
+            event.target.classList.add('on');
+            document.getElementById('go').disabled = false;
+        }
+
+        function start() {
+            document.getElementById('menu').classList.add('hidden');
+            init();
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            scene.fog = new THREE.Fog(0x1a1a2e, 15, 80);
+            
+            cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            cam.position.set(0, 1.6, 5);
+            
+            render = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
+            render.setSize(window.innerWidth, window.innerHeight);
+            
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const light = new THREE.DirectionalLight(0xffffff, 0.5);
+            light.position.set(20, 25, 20);
+            scene.add(light);
+            
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({ color: 0x0d1f33 }));
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+            
+            const wall = new THREE.Mesh(new THREE.PlaneGeometry(50, 12), new THREE.MeshStandardMaterial({ color: 0x1a3a52 }));
+            wall.position.z = -25;
+            wall.position.y = 6;
+            scene.add(wall);
+            
+            const starts = DATA[ind][loc];
+            const ps = [[-10, -8], [0, -8], [10, -8], [-10, 8], [0, 8], [10, 8]];
+            const cs = [0x4169e1, 0xff69b4, 0x228b22, 0xffa500, 0xff6347, 0x20b2aa];
+            
+            // Create table
+            const tableTop = new THREE.Mesh(
+                new THREE.BoxGeometry(30, 0.1, 16),
+                new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.7 })
+            );
+            tableTop.position.y = 0.75;
+            scene.add(tableTop);
+            
+            const tableLeg1 = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.75, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x654321 })
+            );
+            tableLeg1.position.set(-14, 0.375, -7.5);
+            scene.add(tableLeg1);
+            
+            const tableLeg2 = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.75, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x654321 })
+            );
+            tableLeg2.position.set(14, 0.375, -7.5);
+            scene.add(tableLeg2);
+            
+            const tableLeg3 = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.75, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x654321 })
+            );
+            tableLeg3.position.set(-14, 0.375, 7.5);
+            scene.add(tableLeg3);
+            
+            const tableLeg4 = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.75, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x654321 })
+            );
+            tableLeg4.position.set(14, 0.375, 7.5);
+            scene.add(tableLeg4);
+            
+            starts.forEach((s, i) => {
+                const g = new THREE.Group();
+                
+                // Torso (shirt/jacket)
+                const torso = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.22, 0.25, 0.5, 8),
+                    new THREE.MeshStandardMaterial({ color: cs[i], roughness: 0.6 })
+                );
+                torso.position.y = 1.1;
+                g.add(torso);
+                
+                // Head
+                const head = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.28, 12, 10),
+                    new THREE.MeshStandardMaterial({ color: 0xffcba4, roughness: 0.5 })
+                );
+                head.position.y = 1.75;
+                g.add(head);
+                
+                // Hair
+                const hair = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.3, 12, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.7 })
+                );
+                hair.position.set(0, 1.95, 0);
+                hair.scale.y = 0.7;
+                g.add(hair);
+                
+                // Left arm
+                const leftArm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.08, 0.08, 0.4, 6),
+                    new THREE.MeshStandardMaterial({ color: 0xffcba4 })
+                );
+                leftArm.position.set(-0.35, 1.4, 0);
+                leftArm.rotation.z = 0.3;
+                g.add(leftArm);
+                
+                // Right arm
+                const rightArm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.08, 0.08, 0.4, 6),
+                    new THREE.MeshStandardMaterial({ color: 0xffcba4 })
+                );
+                rightArm.position.set(0.35, 1.4, 0);
+                rightArm.rotation.z = -0.3;
+                g.add(rightArm);
+                
+                // Legs
+                const leftLeg = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.1, 0.5, 6),
+                    new THREE.MeshStandardMaterial({ color: 0x2c2c2c })
+                );
+                leftLeg.position.set(-0.15, 0.5, 0);
+                g.add(leftLeg);
+                
+                const rightLeg = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.1, 0.5, 6),
+                    new THREE.MeshStandardMaterial({ color: 0x2c2c2c })
+                );
+                rightLeg.position.set(0.15, 0.5, 0);
+                g.add(rightLeg);
+                
+                // Company name label above head
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, 256, 64);
+                ctx.fillStyle = '#667eea';
+                ctx.font = 'bold 28px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(s.name, 128, 40);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const namePlate = new THREE.Mesh(
+                    new THREE.PlaneGeometry(1.5, 0.4),
+                    new THREE.MeshStandardMaterial({ map: texture, emissive: 0xffffff, emissiveIntensity: 0.3 })
+                );
+                namePlate.position.y = 2.3;
+                namePlate.position.z = 0.3;
+                g.add(namePlate);
+                
+                g.position.set(ps[i][0], 0.75, ps[i][1]);
+                g.userData = s;
+                people.push(g);
+                scene.add(g);
+            });
+
+            setupInput();
+            loop();
+        }
+
+        function setupInput() {
+            document.addEventListener('keydown', e => {
+                if (document.activeElement.id !== 'ask') {
+                    k[e.key.toLowerCase()] = true;
+                    
+                    if (e.key.toLowerCase() === 'e' && !talking) {
+                        let near = null, d = Infinity;
+                        people.forEach(p => {
+                            const dist = pos.distanceTo(p.position);
+                            if (dist < 5 && dist < d) { d = dist; near = p; }
+                        });
+                        
+                        if (near) {
+                            document.getElementById('name').textContent = near.userData.founder + " - " + near.userData.name;
+                            document.getElementById('msgs').innerHTML = `<div class="msg"><strong>${near.userData.founder}:</strong> Hey! I'm working on ${near.userData.name}. What do you want to know?</div>`;
+                            document.getElementById('opts').innerHTML = Object.keys(RESPONSES).map(o => `<div class="opt" onclick="talk('${o}','${near.userData.founder}')">${o}</div>`).join('');
+                            document.getElementById('chat').style.display = 'block';
+                            talking = near;
+                        }
+                    }
+                    
+                    if (e.key === 'Escape') {
+                        document.getElementById('chat').style.display = 'none';
+                        talking = null;
+                    }
+                }
+            });
+            
+            document.addEventListener('keyup', e => { k[e.key.toLowerCase()] = false; });
+            document.addEventListener('mousemove', e => {
+                if (document.getElementById('chat').style.display !== 'block') {
+                    m.x += e.movementX * 0.002;
+                    m.y -= e.movementY * 0.002;
+                }
+            });
+            
+            render.domElement.addEventListener('click', () => render.domElement.requestPointerLock());
+        }
+
+        window.talk = function(q, founder) {
+            const p = people.find(x => x.userData.founder === founder);
+            if (!p) return;
+            
+            document.getElementById('msgs').innerHTML += `<div class="msg"><strong>You:</strong> ${q}</div>`;
+            
+            let response = RESPONSES[q];
+            if (!response) {
+                const responses = [
+                    "That's a great question! We're really excited about what we're building.",
+                    "I love that question. We think a lot about that at " + p.userData.name + ".",
+                    "Yeah, that's core to what we do. We're focused on " + p.userData.desc + ".",
+                    "Honestly, the best part is seeing our impact. " + p.userData.backstory
+                ];
+                response = responses[Math.floor(Math.random() * responses.length)];
+            }
+            
+            document.getElementById('msgs').innerHTML += `<div class="msg"><strong>${founder}:</strong> ${response}</div>`;
+            document.getElementById('msgs').scrollTop = document.getElementById('msgs').scrollHeight;
+        };
+
+        window.send = function() {
+            const q = document.getElementById('ask').value.trim();
+            if (q && talking) {
+                talk(q, talking.userData.founder);
+                document.getElementById('ask').value = '';
+            }
+        };
+
+        function loop() {
+            requestAnimationFrame(loop);
+            
+            // Calculate movement direction based on camera rotation
+            const moveDir = new THREE.Vector3();
+            const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), m.x);
+            const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), m.x);
+            
+            if (document.getElementById('chat').style.display !== 'block') {
+                if (k['w']) moveDir.add(forward.multiplyScalar(0.15));
+                if (k['s']) moveDir.sub(forward.clone().multiplyScalar(0.15));
+                if (k['d']) moveDir.add(right.multiplyScalar(0.15));
+                if (k['a']) moveDir.sub(right.clone().multiplyScalar(0.15));
+            }
+            
+            pos.add(moveDir);
+            
+            pos.x = Math.max(-22, Math.min(22, pos.x));
+            pos.z = Math.max(-22, Math.min(22, pos.z));
+            
+            cam.position.copy(pos);
+            cam.position.y = 1.6;
+            cam.rotation.order = 'YXZ';
+            cam.rotation.y = m.x;
+            cam.rotation.x = m.y;
+            
+            render.render(scene, cam);
+        }
+
+        window.addEventListener('resize', () => {
+            cam.aspect = window.innerWidth / window.innerHeight;
+            cam.updateProjectionMatrix();
+            render.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
